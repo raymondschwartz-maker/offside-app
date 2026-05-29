@@ -91,6 +91,40 @@ app.post('/api/auth/login', async (req, res) => {
   if (data.password_hash && data.password_hash !== hashPass(password)) {
     return res.status(401).json({ error: 'Contraseña incorrecta.' });
   }
+  // ══════ LOGIN/REGISTRO CON GOOGLE ══════
+app.post('/api/auth/google', async (req, res) => {
+  const { email, nombre_completo } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email requerido.' });
+
+  // Si ya existe, devolver el usuario (sin verificar password)
+  const { data: existente } = await supabase.from('usuarios').select('*').eq('email', email.toLowerCase().trim()).single();
+  if (existente) {
+    delete existente.password_hash;
+    return res.json({ ok: true, usuario: existente });
+  }
+
+  // Si no existe, crear cuenta nueva
+  let username = email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '').substring(0, 15);
+  // Asegurar username único
+  const { data: userExiste } = await supabase.from('usuarios').select('id').eq('username', username).single();
+  if (userExiste) username = username + Math.floor(Math.random() * 1000);
+
+  const { data, error } = await supabase.from('usuarios').insert({
+    email: email.toLowerCase().trim(),
+    username,
+    nombre_completo: nombre_completo || '',
+    password_hash: 'google_oauth',
+    fecha_nacimiento: '2000-01-01',
+    pais: '',
+    bio: '',
+    rating_elo: 1000,
+    acepto_terminos: true,
+  }).select().single();
+
+  if (error) { console.log('Google registro error:', error); return res.status(500).json({ error: 'Error al crear cuenta con Google.' }); }
+  delete data.password_hash;
+  res.json({ ok: true, usuario: data });
+});
 
   delete data.password_hash;
   res.json({ ok: true, usuario: data });
